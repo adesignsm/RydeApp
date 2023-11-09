@@ -19,7 +19,7 @@ const Header = () => {
                 <Text style={styles.subHeadingText}>Sound Shower Experience</Text>
             </View>
             <View>
-                <Text style={styles.instructionsText}>Tap the option below to trigger the experience</Text>
+                <Text style={styles.instructionsText}>Select a TV & tap the option below to trigger the experience</Text>
             </View>
         </View>
     );

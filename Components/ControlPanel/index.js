@@ -1,10 +1,27 @@
-import { Image, Text, View, StyleSheet, TouchableOpacity, Animated } from 'react-native';
+import { useState } from 'react';
+import DropDownPicker from 'react-native-dropdown-picker';
+import { Image, Text, View, TouchableOpacity, Animated } from 'react-native';
 import { useFonts } from 'expo-font';
+import { buttonStyles, dropDownStyles, styles } from './styles';
+import VolumeSlider from '../VolumeSlider';
 
 import ENERGIZE_BOTTLE from '../../Media/energizeBottle.png';
 import FOCUS_BOTTLE from '../../Media/focusBottle.png';
 import RELAX_BOTTLE from '../../Media/relaxBottle.png';
-import { useState } from 'react';
+
+import { initializeApp } from 'firebase/app';
+import { getDatabase , ref, get, child, update } from 'firebase/database';
+
+const firebaseConfig = {
+    apiKey: 'AIzaSyDMaoMd9JHWrnG2_qlskyaq4nFZN88tmcY',
+    authDomain: 'project-id.firebaseapp.com',
+    databaseURL: 'https://ryde-env-default-rtdb.firebaseio.com',
+    projectId: 'ryde-env',
+    storageBucket: 'ryde-env.appspot.com',
+    messagingSenderId: 'sender-id',
+    appId: 'app-id',
+    measurementId: 'G-measurement-id',
+};
 
 const ControlPanel = () => {
     const [energizePlaying, setEnergizePlaying] = useState(false);
@@ -18,6 +35,18 @@ const ControlPanel = () => {
     const [liftedEnergize] = useState(new Animated.Value(0));
     const [liftedFocus] = useState(new Animated.Value(0));
     const [liftedRelax] = useState(new Animated.Value(0));
+
+    const [tvOneStatus, setTvOneStatus] = useState(true);
+    const [tvTwoStatus, setTvTwoStatus] = useState(true);
+    const [tvThreeStatus, setTvThreeStatus] = useState(true);
+
+    const [menuOpen, setMenuOpen] = useState(false);
+    const [menuVal, setMenuVal] = useState(null);
+    const items = [
+        {label: 'TV One', value: 'tv-one',},
+        {label: 'TV Two', value: 'tv-two',},
+        {label: 'TV Three', value: 'tv-three',}
+    ];
 
     const energizeContainerAnimationStyle = { transform: [{ translateY: liftedEnergize }] };
     const focusContainerAnimationStyle = { transform: [{ translateY: liftedFocus }] };
@@ -33,83 +62,298 @@ const ControlPanel = () => {
         return null;
     }
 
-    const handleEnergyPlay = () => {
-        setEnergizePlaying(true);
+    const app = initializeApp(firebaseConfig);
+    const database = getDatabase(app);
 
-        setFocusDiasbled(true);
-        setRelaxDiasbled(true);
+    DropDownPicker.setTheme('LIGHT');
+
+    const getTvProfiles = () => {
+        const dbRef = ref(database);
+        get(child(dbRef, '/tv-profiles')).then((snapshot) => {
+            if (snapshot.exists()) {
+                const data = snapshot.val();
+                setTvOneStatus(data['tv-one'].status);
+                setTvTwoStatus(data['tv-two'].status);
+                setTvThreeStatus(data['tv-three'].status);
+            } else {
+                console.log('no data');
+            }
+        }).catch((error) => {
+            console.log(error);
+        });
+    }
+
+    getTvProfiles();
+
+    const handleItemSelect = (item) => {
+        const dbRef = ref(database, '/tv-profiles');
+
+        const updates = {};
+        updates[item.value] = {
+          status: true,
+          experience: item.value === 'tv-one'
+            ? 'none'
+            : (
+              (item.value === 'tv-two' && (tvTwoStatus === 'energize' || tvTwoStatus === 'focus' || tvTwoStatus === 'relax')) ||
+              (item.value === 'tv-three' && (tvThreeStatus === 'energize' || tvThreeStatus === 'focus' || tvThreeStatus === 'relax'))
+            ) ? item.value : 'some_value',
+        };
+        
+        update(dbRef, updates);
+    
+        // Get the experience of the currently selected TV option
+        const selectedExperience = updates[item.value].experience; // Use `updates` instead of `updatedData`
+
+        // Set the disabled states based on the selected experience
+        setEnergizeDiasbled(selectedExperience !== 'none' && selectedExperience !== 'some_value');
+        setFocusDiasbled(selectedExperience !== 'none' && selectedExperience !== 'some_value');
+        setRelaxDiasbled(selectedExperience !== 'none' && selectedExperience !== 'some_value');
+
+        setEnergizePlaying(selectedExperience === 'energize');
+        setFocusPlaying(selectedExperience === 'focus');
+        setRelaxPlaying(selectedExperience === 'relax');
+
+        // No need to update TV statuses as it's handled in the Firebase update
+
+        if (energizePlaying) {
+        Animated.spring(liftedEnergize, {
+            toValue: 0,
+            duration: 300,
+            useNativeDriver: false,
+        }).start();
+        } else if (focusPlaying) {
+        Animated.spring(liftedFocus, {
+            toValue: 0,
+            duration: 300,
+            useNativeDriver: false,
+        }).start();
+        } else if (relaxPlaying) {
+        Animated.spring(liftedRelax, {
+            toValue: 0,
+            duration: 300,
+            useNativeDriver: false,
+        }).start();
+        }
+
+    }
+    
+    const handleEnergyPlay = () => {
+
+        setTvOneStatus({ ...tvOneStatus, experience: 'energize' });
+        // setFocusDiasbled(true);
+        // setRelaxDiasbled(true);
 
         Animated.spring(liftedEnergize, {
             toValue: -50,
             duration: 300,
             useNativeDriver: false
         }).start();
+
+        setEnergizePlaying(true);
+
+        const selectedTV = menuVal;
+
+        const updatedData = {
+            [selectedTV]: {
+            status: tvOneStatus,
+            experience: 'energize',
+            },
+        };
+
+        const dbRef = ref(database, '/tv-profiles');
+        update(dbRef, updatedData);
     }
     const handleEnergyStop = () => {
         setEnergizePlaying(false);
 
-        setFocusDiasbled(false);
-        setRelaxDiasbled(false);
+        setTvOneStatus({ ...tvOneStatus, experience: 'none' });
+        // setFocusDiasbled(false);
+        // setRelaxDiasbled(false);
 
         Animated.spring(liftedEnergize, {
             toValue: 0,
             duration: 300,
             useNativeDriver: false
         }).start();
+
+        const selectedOption = menuVal;
+        if (selectedOption) {
+            const dbRef = ref(database, '/tv-profiles');
+            
+            // Check the current experience for the selected TV option
+            get(child(dbRef, selectedOption)).then((snapshot) => {
+            if (snapshot.exists()) {
+                const data = snapshot.val();
+                const currentExperience = data.experience;
+                
+                // If the current experience is "none," update the status to false
+                if (currentExperience === 'energize') {
+                    const updatedData = {
+                        [selectedOption]: {
+                            status: false,
+                            experience: 'none',
+                        },
+                    };
+                    update(dbRef, updatedData);
+                }
+            }
+            }).catch((error) => {
+                console.log(error);
+            });
+        }
     }
 
     const handleFocusPlay = () => {
         setFocusPlaying(true);
 
-        setEnergizeDiasbled(true);
-        setRelaxDiasbled(true);
+        setTvTwoStatus({ ...tvTwoStatus, experience: 'focus' });
+        // setFocusDiasbled(true);
+        // setRelaxDiasbled(true);
 
         Animated.spring(liftedFocus, {
             toValue: -50,
             duration: 300,
             useNativeDriver: false
         }).start();
+
+        setFocusPlaying(true);
+
+        const selectedTV = menuVal;
+
+        const updatedData = {
+            [selectedTV]: {
+                status: tvTwoStatus,
+                experience: 'focus',
+            },
+        };
+
+        const dbRef = ref(database, '/tv-profiles');
+        update(dbRef, updatedData);
     }
     const handleFocusStop = () => {
         setFocusPlaying(false);
 
-        setEnergizeDiasbled(false);
-        setRelaxDiasbled(false);
+        // setEnergizeDiasbled(false);
+        // setRelaxDiasbled(false);
 
         Animated.spring(liftedFocus, {
             toValue: 0,
             duration: 300,
             useNativeDriver: false
         }).start();
+
+        const selectedOption = menuVal;
+        if (selectedOption) {
+            const dbRef = ref(database, '/tv-profiles');
+            
+            // Check the current experience for the selected TV option
+            get(child(dbRef, selectedOption)).then((snapshot) => {
+            if (snapshot.exists()) {
+                const data = snapshot.val();
+                const currentExperience = data.experience;
+                
+                // If the current experience is "none," update the status to false
+                if (currentExperience === 'focus') {
+                    const updatedData = {
+                        [selectedOption]: {
+                            status: false,
+                            experience: 'none',
+                        },
+                    };
+                    update(dbRef, updatedData);
+                }
+            }
+            }).catch((error) => {
+                console.log(error);
+            });
+        }
     }
 
     const handleRelaxPlay = () => {
         setRelaxPlaying(true);
 
-        setFocusDiasbled(true);
-        setEnergizeDiasbled(true);
+        setTvTwoStatus({ ...tvThreeStatus, experience: 'relax' });
+        // setFocusDiasbled(true);
+        // setRelaxDiasbled(true);
 
         Animated.spring(liftedRelax, {
             toValue: -50,
             duration: 300,
             useNativeDriver: false
         }).start();
+
+        setFocusPlaying(true);
+
+        const selectedTV = menuVal;
+
+        const updatedData = {
+            [selectedTV]: {
+                status: tvThreeStatus,
+                experience: 'relax',
+            },
+        };
+
+        const dbRef = ref(database, '/tv-profiles');
+        update(dbRef, updatedData);
     }
     const handleRelaxStop = () => {
         setRelaxPlaying(false);
 
-        setFocusDiasbled(false);
-        setEnergizeDiasbled(false);
+        // setFocusDiasbled(false);
+        // setEnergizeDiasbled(false);
 
         Animated.spring(liftedRelax, {
             toValue: 0,
             duration: 300,
             useNativeDriver: false
         }).start();
+
+        const selectedOption = menuVal;
+        if (selectedOption) {
+            const dbRef = ref(database, '/tv-profiles');
+            
+            // Check the current experience for the selected TV option
+            get(child(dbRef, selectedOption)).then((snapshot) => {
+            if (snapshot.exists()) {
+                const data = snapshot.val();
+                const currentExperience = data.experience;
+                
+                // If the current experience is "none," update the status to false
+                if (currentExperience === 'relax') {
+                    const updatedData = {
+                        [selectedOption]: {
+                            status: false,
+                            experience: 'none',
+                        },
+                    };
+                    update(dbRef, updatedData);
+                }
+            }
+            }).catch((error) => {
+                console.log(error);
+            });
+        }
     }
 
     return (
         <View style={styles.container}>
+            {/*TV OPTIONS SELECT*/}
+            <View style={dropDownStyles.dropDownContainer}>
+                <DropDownPicker 
+                    style={dropDownStyles.dropdown}
+                    textStyle={dropDownStyles.dropdownText}
+                    containerStyle={dropDownStyles.dropDownOptionsContainer}
+                    dropDownContainerStyle={dropDownStyles.dropDownOptionsContainer}
+                    disabledItemLabelStyle={dropDownStyles.itemDisabled}
+                    open={menuOpen} 
+                    value={menuVal} 
+                    items={items} 
+                    setOpen={setMenuOpen} 
+                    setValue={setMenuVal} 
+                    placeholder={'Select a TV'}
+                    onSelectItem={(item) => handleItemSelect(item)}
+                /> 
+            </View>
             {/*ENERGIZE */}
             <Animated.View style={[styles.energizeContainer, energizeDiasbled && styles.disabled, energizeContainerAnimationStyle]}>
                 <Image style={styles.image} source={ENERGIZE_BOTTLE} />
@@ -157,121 +401,17 @@ const ControlPanel = () => {
                     </TouchableOpacity>
                 </View>
             </Animated.View>
+            {energizePlaying ? (
+                <VolumeSlider />
+            ) : focusPlaying ? (
+                <VolumeSlider />
+            ) : relaxPlaying ? (
+                <VolumeSlider />
+            ) : (
+                null
+            )}
         </View>
     );
 }
 
 export default ControlPanel;
-
-const buttonStyles = StyleSheet.create({
-    playingButton: {
-        backgroundColor: '#fff'
-    },
-    playingButtonText: {
-        color: '#000'
-    },
-    stopButton: {
-        backgroundColor: 'transparent'
-    },
-    stopButtonText: {
-        color: '#fff'
-    },
-    disabled: {
-        opacity: 0.5
-    }
-});
-
-const styles = StyleSheet.create({
-    container: {
-        display: 'flex',
-        flexDirection: 'row',
-        height: '100%',
-        marginTop: 125,
-    },
-    energizeContainer: {
-        display: 'flex',
-        alignItems: 'center',
-        height: '100%',
-        width: '33.33%',
-        backgroundColor: '#EE3831',
-        borderTopLeftRadius: 100,
-        borderTopRightRadius: 100,
-        shadowColor: "#000",
-        shadowOffset: {
-            width: 0,
-            height: 12,
-        },
-        shadowOpacity: 0.58,
-        shadowRadius: 16.00,
-        elevation: 24,
-    },
-    focusContainer: {
-        display: 'flex',
-        alignItems: 'center',
-        height: '100%',
-        width: '33.33%',
-        backgroundColor: '#FFC845',
-        borderTopLeftRadius: 100,
-        borderTopRightRadius: 100,
-        shadowColor: "#000",
-        shadowOffset: {
-            width: 0,
-            height: 12,
-        },
-        shadowOpacity: 0.58,
-        shadowRadius: 16.00,
-        elevation: 24,
-    },
-    relaxContainer: {
-        display: 'flex',
-        alignItems: 'center',
-        height: '100%',
-        width: '33.33%',
-        backgroundColor: '#6A9EF0',
-        borderTopLeftRadius: 100,
-        borderTopRightRadius: 100,
-        shadowColor: "#000",
-        shadowOffset: {
-            width: 0,
-            height: 12,
-        },
-        shadowOpacity: 0.58,
-        shadowRadius: 16.00,
-        elevation: 24,
-    },
-    image: {
-        transform: [{scale: 0.9}],
-        marginTop: -180,
-    },
-    text: {
-        marginTop: -35,
-        fontFamily: 'RydeBold',
-        textTransform: 'uppercase',
-        fontSize: 20,
-        color: '#fff'
-    },
-    buttonContainer: {
-        display: 'flex',
-        flexDirection: 'row',
-        justifyContent: 'space-evenly',
-        width: '100%',
-        marginTop: 25,
-    },
-    button: {
-        borderColor: '#fff',
-        borderWidth: 4,
-        borderRadius: 15,
-        padding: 10,
-        width: 150,
-        display: 'flex',
-        alignItems: 'center'
-    },
-    buttonText: {
-        color: '#fff',
-        textTransform: 'uppercase',
-        fontFamily: 'RydeBold',
-    },
-    disabled: {
-        opacity: 0.5
-    }
-});

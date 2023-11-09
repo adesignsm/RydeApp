@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "725076097765",
+    "project_id": "ryde-env",
+    "storage_bucket": "ryde-env.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:725076097765:android:5c53af1a241b4c3b3df20c",
+        "android_client_info": {
+          "package_name": "com.hexstudio.rydeAppEnv"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDMaoMd9JHWrnG2_qlskyaq4nFZN88tmcY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
